@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	PvnWrapperVersion = "0.0.1"
+	PvnWrapperVersion = "0.0.2"
 )
 
 type ResultType struct {
@@ -63,4 +63,9 @@ func main() {
 		// If something went wrong during encode/write to stdout, indicate that in stderr and exit non-zero.
 		log.Fatal(err)
 	}
+
+	// If the wrapped process fails, make sure this process has a non-zero exit code.
+	// This is to maintain compatibility with existing task execution infrastructure.
+	// Once we enforce the use of this wrapper, we can safely exit 0 here.
+	os.Exit(result.ExitCode)
 }

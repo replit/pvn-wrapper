@@ -3,9 +3,9 @@ FROM golang:1.20 AS builder
 WORKDIR /src/
 
 COPY . .
+ENV CGO_ENABLED=0
 RUN go build -v -o /usr/local/bin/pvn-wrapper ./cmd/pvn-wrapper
 
-FROM debian:bullseye-slim
-COPY --from=builder /usr/local/bin/pvn-wrapper /usr/local/bin/pvn-wrapper
-
-ENTRYPOINT ["pvn-wrapper"]
+FROM scratch
+COPY --from=builder /usr/local/bin/pvn-wrapper /pvn-wrapper
+ENTRYPOINT ["/pvn-wrapper"]

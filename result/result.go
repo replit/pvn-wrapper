@@ -25,7 +25,7 @@ type ResultType struct {
 	Version          string `json:"version"`     // Wrapper version.
 	StartTimestampNs int64  `json:"start_ts_ns"` // Timestamp when the process began executing, in ns.
 	DurationNs       int64  `json:"duration_ns"` // Total execution duration of the process, in ns.
-	Files            []File
+	Files            []File `json:"files"`
 }
 
 type File struct {

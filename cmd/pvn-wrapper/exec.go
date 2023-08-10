@@ -1,21 +1,19 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"log"
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
-	"time"
+	"strings"
 
 	"github.com/prodvana/pvn-wrapper/result"
 	"github.com/spf13/cobra"
 )
 
-const (
-	PvnWrapperVersion = "0.0.2"
-)
+var execFlags = struct {
+	out []string
+}{}
 
 var execCmd = &cobra.Command{
 	Use:   "exec",
@@ -27,52 +25,29 @@ pvn-wrapper exec my-binary --my-flag=value my-args ...
 `,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		startTs := time.Now()
+		result.RunWrapper(func(ctx context.Context) (*result.ResultType, []result.OutputFileUpload, error) {
+			execCmd := exec.CommandContext(ctx, args[0], args[1:]...)
+			execCmd.Env = os.Environ()
 
-		execCmd := exec.Command(args[0], args[1:]...)
-		execCmd.Env = os.Environ()
-
-		// TODO: Limit stdout/stderr to a reasonable size while preserving useful error context.
-		// Kubernetes output is usually limited to 10MB.
-		stdout := new(bytes.Buffer)
-		stderr := new(bytes.Buffer)
-		execCmd.Stdout = stdout
-		execCmd.Stderr = stderr
-
-		var result result.ResultType
-
-		err := execCmd.Run()
-		duration := time.Since(startTs)
-
-		if err != nil {
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				result.ExitCode = exitErr.ExitCode()
-			} else {
-				result.ExecError = err.Error()
-				result.ExitCode = -1
+			outputs := make([]result.OutputFileUpload, 0, len(execFlags.out))
+			for _, out := range execFlags.out {
+				components := strings.SplitN(out, "=", 2)
+				if len(components) != 2 {
+					return nil, nil, fmt.Errorf("--out must be in the format output-name=output-file")
+				}
+				outputs = append(outputs, result.OutputFileUpload{
+					Name: components[0],
+					Path: components[1],
+				})
 			}
-		}
 
-		result.Stdout = stdout.Bytes()
-		result.Stderr = stderr.Bytes()
-		result.Version = PvnWrapperVersion
-		result.StartTimestampNs = startTs.UnixNano()
-		result.DurationNs = duration.Nanoseconds()
-
-		err = json.NewEncoder(os.Stdout).Encode(&result)
-		if err != nil {
-			// If something went wrong during encode/write to stdout, indicate that in stderr and exit non-zero.
-			log.Fatal(err)
-		}
-
-		// If the wrapped process fails, make sure this process has a non-zero exit code.
-		// This is to maintain compatibility with existing task execution infrastructure.
-		// Once we enforce the use of this wrapper, we can safely exit 0 here.
-		os.Exit(result.ExitCode)
+			res, err := result.RunCmd(execCmd)
+			return res, outputs, err
+		})
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(execCmd)
+	execCmd.Flags().StringArrayVar(&execFlags.out, "out", nil, "List of output files to capture, in the format of output-name=output-file. These files will be uploaded to Prodvana.")
 }

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	go_errors "errors"
 	"io"
 	"log"
@@ -13,8 +12,10 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/prodvana/prodvana-public/go/prodvana-sdk/client"
 	blobs_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/blobs"
+	"google.golang.org/grpc"
 )
 
 type ResultType struct {
@@ -39,6 +40,11 @@ type OutputFileUpload struct {
 	// only one or the other can be specified
 	Path    string
 	Content []byte
+}
+
+type InputFile struct {
+	Path   string
+	BlobId string
 }
 
 const (
@@ -104,10 +110,63 @@ func uploadOutput(ctx context.Context, blobsClient blobs_pb.BlobsManagerClient, 
 	return resp.Id, nil
 }
 
+func downloadBlob(ctx context.Context, blobsClient blobs_pb.BlobsManagerClient, file InputFile) error {
+	strm, err := blobsClient.GetCasBlob(ctx, &blobs_pb.GetCasBlobReq{
+		Id: file.BlobId,
+	})
+	if err != nil {
+		return errors.Wrapf(err, "failed to initiate download of blob %s", file.BlobId)
+	}
+	defer func() { _ = strm.CloseSend() }()
+	f, err := os.Create(file.Path)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %s", file.Path)
+	}
+	defer func() { _ = f.Close() }()
+	for {
+		resp, err := strm.Recv()
+		if err != nil {
+			if go_errors.Is(err, io.EOF) {
+				break
+			}
+			return errors.Wrapf(err, "failed to download blob %s", file.BlobId)
+		}
+		_, err = f.Write(resp.Bytes)
+		if err != nil {
+			return errors.Wrapf(err, "failed to write to %s", file.Path)
+		}
+	}
+	return nil
+}
+
 // Handle the "main" function of wrapper commands.
 // This function never returns.
-func RunWrapper(run func(context.Context) (*ResultType, []OutputFileUpload, error)) {
+func RunWrapper(inputFiles []InputFile, run func(context.Context) (*ResultType, []OutputFileUpload, error)) {
 	ctx := context.Background()
+	var conn *grpc.ClientConn
+	var blobsClient blobs_pb.BlobsManagerClient
+	getBlobsClient := func() blobs_pb.BlobsManagerClient {
+		if blobsClient == nil {
+			var err error
+			conn, err = client.MakeProdvanaConnection(client.DefaultConnectionOptions())
+			if err != nil {
+				// TODO(naphat) should we return json in the event of infra errors too?
+				log.Fatal(err)
+			}
+			blobsClient = blobs_pb.NewBlobsManagerClient(conn)
+		}
+		return blobsClient
+	}
+	defer func() {
+		if conn != nil {
+			_ = conn.Close()
+		}
+	}()
+	for _, input := range inputFiles {
+		if err := downloadBlob(ctx, getBlobsClient(), input); err != nil {
+			log.Fatal(err)
+		}
+	}
 	startTs := time.Now()
 	result, outputFiles, err := run(ctx)
 	duration := time.Since(startTs)
@@ -126,9 +185,8 @@ func RunWrapper(run func(context.Context) (*ResultType, []OutputFileUpload, erro
 			log.Fatal(err)
 		}
 		defer func() { _ = conn.Close() }()
-		blobsClient := blobs_pb.NewBlobsManagerClient(conn)
 		for _, file := range outputFiles {
-			id, err := uploadOutput(ctx, blobsClient, file)
+			id, err := uploadOutput(ctx, getBlobsClient(), file)
 			if err != nil {
 				// TODO(naphat) should we return json in the event of infra errors too?
 				log.Fatal(err)
@@ -166,7 +224,7 @@ func RunCmd(cmd *exec.Cmd) (*ResultType, error) {
 
 	if err != nil {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if go_errors.As(err, &exitErr) {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
 			return nil, err

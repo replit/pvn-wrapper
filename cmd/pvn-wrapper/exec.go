@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -12,6 +13,7 @@ import (
 )
 
 var execFlags = struct {
+	in  []string
 	out []string
 }{}
 
@@ -25,7 +27,18 @@ pvn-wrapper exec my-binary --my-flag=value my-args ...
 `,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		result.RunWrapper(func(ctx context.Context) (*result.ResultType, []result.OutputFileUpload, error) {
+		inputFiles := make([]result.InputFile, 0, len(execFlags.in))
+		for _, in := range execFlags.in {
+			components := strings.SplitN(in, "=", 2)
+			if len(components) != 2 {
+				log.Fatal("--in must be in the format input-file-path=input-blob-id")
+			}
+			inputFiles = append(inputFiles, result.InputFile{
+				Path:   components[0],
+				BlobId: components[1],
+			})
+		}
+		result.RunWrapper(inputFiles, func(ctx context.Context) (*result.ResultType, []result.OutputFileUpload, error) {
 			execCmd := exec.CommandContext(ctx, args[0], args[1:]...)
 			execCmd.Env = os.Environ()
 
@@ -49,5 +62,6 @@ pvn-wrapper exec my-binary --my-flag=value my-args ...
 
 func init() {
 	rootCmd.AddCommand(execCmd)
-	execCmd.Flags().StringArrayVar(&execFlags.out, "out", nil, "List of output files to capture, in the format of output-name=output-file. These files will be uploaded to Prodvana.")
+	execCmd.Flags().StringArrayVar(&execFlags.in, "in", nil, "List of input files that should be created, in the format input-file-path=input-blob-id. These files will be downloaded from Prodvana and saved to the specified paths before the binary executes.")
+	execCmd.Flags().StringArrayVar(&execFlags.out, "out", nil, "List of output files to capture, in the format of output-name=output-file-path. These files will be uploaded to Prodvana.")
 }

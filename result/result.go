@@ -15,27 +15,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prodvana/prodvana-public/go/prodvana-sdk/client"
 	blobs_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/blobs"
+	"github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/pvn_wrapper"
 	"google.golang.org/grpc"
 )
 
-type ResultType struct {
-	ExitCode         int    `json:"exit_code"`  // Exit code of wrapped process. -1 if process failed to execute.
-	ExecError        string `json:"exec_error"` // Internal error when trying to execute wrapped process.
-	Stdout           []byte `json:"stdout"`
-	Stderr           []byte `json:"stderr"`
-	Version          string `json:"version"`     // Wrapper version.
-	StartTimestampNs int64  `json:"start_ts_ns"` // Timestamp when the process began executing, in ns.
-	DurationNs       int64  `json:"duration_ns"` // Total execution duration of the process, in ns.
-	Files            []File `json:"files"`
-}
-
-type File struct {
-	Name          string `json:"name"`
-	ContentBlobId string `json:"content_blob_id"`
-}
-
 type OutputFileUpload struct {
-	Name string
+	Name   string
+	Stdout bool
+	Stderr bool
 
 	// only one or the other can be specified
 	Path    string
@@ -141,7 +128,7 @@ func downloadBlob(ctx context.Context, blobsClient blobs_pb.BlobsManagerClient, 
 
 // Handle the "main" function of wrapper commands.
 // This function never returns.
-func RunWrapper(inputFiles []InputFile, run func(context.Context) (*ResultType, []OutputFileUpload, error)) {
+func RunWrapper(inputFiles []InputFile, run func(context.Context) (*pvn_wrapper.Output, []OutputFileUpload, error)) {
 	ctx := context.Background()
 	var conn *grpc.ClientConn
 	var blobsClient blobs_pb.BlobsManagerClient
@@ -171,7 +158,7 @@ func RunWrapper(inputFiles []InputFile, run func(context.Context) (*ResultType, 
 	result, outputFiles, err := run(ctx)
 	duration := time.Since(startTs)
 	if err != nil {
-		result := &ResultType{}
+		result := &pvn_wrapper.Output{}
 		result.ExecError = err.Error()
 		result.ExitCode = -1
 	}
@@ -191,10 +178,22 @@ func RunWrapper(inputFiles []InputFile, run func(context.Context) (*ResultType, 
 				// TODO(naphat) should we return json in the event of infra errors too?
 				log.Fatal(err)
 			}
-			result.Files = append(result.Files, File{
-				Name:          file.Name,
-				ContentBlobId: id,
-			})
+			if file.Stdout {
+				if result.StdoutBlobId != "" {
+					log.Fatal("internal error: multiple stdout provided")
+				}
+				result.StdoutBlobId = id
+			} else if file.Stderr {
+				if result.StderrBlobId != "" {
+					log.Fatal("internal error: multiple stderr provided")
+				}
+				result.StderrBlobId = id
+			} else {
+				result.Files = append(result.Files, &pvn_wrapper.OutputFile{
+					Name:          file.Name,
+					ContentBlobId: id,
+				})
+			}
 		}
 	}
 
@@ -207,31 +206,36 @@ func RunWrapper(inputFiles []InputFile, run func(context.Context) (*ResultType, 
 	// If the wrapped process fails, make sure this process has a non-zero exit code.
 	// This is to maintain compatibility with existing task execution infrastructure.
 	// Once we enforce the use of this wrapper, we can safely exit 0 here.
-	os.Exit(result.ExitCode)
+	os.Exit(int(result.ExitCode))
 }
 
-func RunCmd(cmd *exec.Cmd) (*ResultType, error) {
-	// TODO: Limit stdout/stderr to a reasonable size while preserving useful error context.
-	// Kubernetes output is usually limited to 10MB.
+func RunCmd(cmd *exec.Cmd) (*pvn_wrapper.Output, []OutputFileUpload, error) {
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	var result ResultType
+	var result pvn_wrapper.Output
 
 	err := cmd.Run()
 
 	if err != nil {
 		var exitErr *exec.ExitError
 		if go_errors.As(err, &exitErr) {
-			result.ExitCode = exitErr.ExitCode()
+			result.ExitCode = int32(exitErr.ExitCode())
 		} else {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	result.Stdout = stdout.Bytes()
-	result.Stderr = stderr.Bytes()
-	return &result, nil
+	return &result, []OutputFileUpload{
+		{
+			Stdout:  true,
+			Content: stdout.Bytes(),
+		},
+		{
+			Stderr:  true,
+			Content: stdout.Bytes(),
+		},
+	}, nil
 }

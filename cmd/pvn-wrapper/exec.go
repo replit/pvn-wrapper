@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/pvn_wrapper"
 	"github.com/prodvana/pvn-wrapper/result"
 	"github.com/spf13/cobra"
 )
@@ -38,7 +39,7 @@ pvn-wrapper exec my-binary --my-flag=value my-args ...
 				BlobId: components[1],
 			})
 		}
-		result.RunWrapper(inputFiles, func(ctx context.Context) (*result.ResultType, []result.OutputFileUpload, error) {
+		result.RunWrapper(inputFiles, func(ctx context.Context) (*pvn_wrapper.Output, []result.OutputFileUpload, error) {
 			execCmd := exec.CommandContext(ctx, args[0], args[1:]...)
 			execCmd.Env = os.Environ()
 
@@ -54,7 +55,8 @@ pvn-wrapper exec my-binary --my-flag=value my-args ...
 				})
 			}
 
-			res, err := result.RunCmd(execCmd)
+			res, cmdOutputs, err := result.RunCmd(execCmd)
+			outputs = append(outputs, cmdOutputs...)
 			return res, outputs, err
 		})
 	},

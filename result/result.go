@@ -235,7 +235,7 @@ func RunCmd(cmd *exec.Cmd) (*pvn_wrapper.Output, []OutputFileUpload, error) {
 		},
 		{
 			Stderr:  true,
-			Content: stdout.Bytes(),
+			Content: stderr.Bytes(),
 		},
 	}, nil
 }

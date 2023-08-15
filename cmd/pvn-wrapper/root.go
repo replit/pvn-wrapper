@@ -19,6 +19,7 @@ func init() {
 }
 
 func main() {
+	log.SetFlags(log.Lmicroseconds | log.Lshortfile)
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}

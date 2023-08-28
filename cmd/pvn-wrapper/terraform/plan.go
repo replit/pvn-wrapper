@@ -17,9 +17,8 @@ var planFlags = struct {
 }{}
 
 var planCmd = &cobra.Command{
-	Use:     "plan",
-	Short:   "terraform plan wrapper",
-	Aliases: []string{"tf"},
+	Use:   "plan",
+	Short: "terraform plan wrapper",
 	Long: `terraform plan wrapper.
 
 Takes all the same input that terraform plan would, but handles creating plan files and explanation, then exiting with 0, 1, or 2.

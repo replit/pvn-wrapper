@@ -14,8 +14,9 @@ import (
 )
 
 var execFlags = struct {
-	in  []string
-	out []string
+	in               []string
+	out              []string
+	successExitCodes []int32
 }{}
 
 var execCmd = &cobra.Command{
@@ -39,7 +40,11 @@ pvn-wrapper exec my-binary --my-flag=value my-args ...
 				BlobId: components[1],
 			})
 		}
-		result.RunWrapper(inputFiles, func(ctx context.Context) (*pvn_wrapper.Output, []result.OutputFileUpload, error) {
+		successExitCodes := execFlags.successExitCodes
+		if len(successExitCodes) == 0 {
+			successExitCodes = []int32{0}
+		}
+		result.RunWrapper(inputFiles, successExitCodes, func(ctx context.Context) (*pvn_wrapper.Output, []result.OutputFileUpload, error) {
 			execCmd := exec.CommandContext(ctx, args[0], args[1:]...)
 			execCmd.Env = os.Environ()
 
@@ -66,4 +71,5 @@ func init() {
 	rootCmd.AddCommand(execCmd)
 	execCmd.Flags().StringArrayVar(&execFlags.in, "in", nil, "List of input files that should be created, in the format input-file-path=input-blob-id. These files will be downloaded from Prodvana and saved to the specified paths before the binary executes.")
 	execCmd.Flags().StringArrayVar(&execFlags.out, "out", nil, "List of output files to capture, in the format of output-name=output-file-path. These files will be uploaded to Prodvana.")
+	execCmd.Flags().Int32SliceVar(&execFlags.successExitCodes, "success-exit-codes", nil, "List of successful exit codes, used in the event that the program exited but an output file is missing. If the output file is missing and the exit code is a successful exit code as defined here, then the script will fail with an error (and no json output). Defaults to 0.")
 }

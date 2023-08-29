@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	go_errors "errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -128,7 +129,7 @@ func downloadBlob(ctx context.Context, blobsClient blobs_pb.BlobsManagerClient, 
 
 // Handle the "main" function of wrapper commands.
 // This function never returns.
-func RunWrapper(inputFiles []InputFile, run func(context.Context) (*pvn_wrapper.Output, []OutputFileUpload, error)) {
+func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(context.Context) (*pvn_wrapper.Output, []OutputFileUpload, error)) {
 	ctx := context.Background()
 	var conn *grpc.ClientConn
 	var blobsClient blobs_pb.BlobsManagerClient
@@ -165,6 +166,13 @@ func RunWrapper(inputFiles []InputFile, run func(context.Context) (*pvn_wrapper.
 	result.StartTimestampNs = startTs.UnixNano()
 	result.DurationNs = duration.Nanoseconds()
 	result.Version = PvnWrapperVersion
+	isSuccessful := false
+	for _, exitCode := range successExitCodes {
+		if exitCode == result.ExitCode {
+			isSuccessful = true
+			break
+		}
+	}
 	if len(outputFiles) > 0 {
 		conn, err := client.MakeProdvanaConnection(client.DefaultConnectionOptions())
 		if err != nil {
@@ -173,10 +181,38 @@ func RunWrapper(inputFiles []InputFile, run func(context.Context) (*pvn_wrapper.
 		}
 		defer func() { _ = conn.Close() }()
 		for _, file := range outputFiles {
-			id, err := uploadOutput(ctx, getBlobsClient(), file)
-			if err != nil {
-				// TODO(naphat) should we return json in the event of infra errors too?
-				log.Fatal(err)
+			id, uploadErr := uploadOutput(ctx, getBlobsClient(), file)
+			if uploadErr != nil {
+				if !os.IsNotExist(uploadErr) || isSuccessful {
+					// for IsNotExist errors in the event the program did not exit successfully, do not hard error on missing output file.
+					// TODO(naphat) should we return json in the event of infra errors too?
+					// for now, print out every output file so that we have the output for debugging
+					for _, file := range outputFiles {
+						if file.Stderr {
+							fmt.Printf("Stderr:\n")
+						} else if file.Stdout {
+							fmt.Printf("Stdout:\n")
+						} else {
+							fmt.Printf("Output file: %s\n", file.Name)
+						}
+						var bytes []byte
+						var err error
+						if file.Path != "" {
+							bytes, err = os.ReadFile(file.Path)
+							if err != nil {
+								log.Printf("Failed to read file %s: %v", file.Path, err)
+							}
+						} else {
+							bytes = file.Content
+						}
+						_, err = os.Stdout.Write(bytes)
+						if err != nil {
+							log.Printf("Failed to write output %s for debugging: %+v", file.Name, err)
+						}
+					}
+					log.Fatalf("failed to upload file %s: %+v\n", file.Path, uploadErr)
+				}
+				continue
 			}
 			if file.Stdout {
 				if result.StdoutBlobId != "" {

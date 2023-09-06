@@ -4,12 +4,13 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
+    flags:
+    - -trimpath
     main: ./cmd/pvn-wrapper
     goos:
       - linux
       - windows
       - darwin
-archives:
 checksum:
   name_template: "checksums.txt"
 snapshot:
@@ -22,3 +23,46 @@ release:
     owner: prodvana
     name: pvn-wrapper
   mode: replace
+
+dockers:
+  - dockerfile: "build_template.docker"
+    use: buildx
+    skip_push: true
+    image_templates:
+      - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--platform=linux/amd64"
+  - dockerfile: "build_template.docker"
+    use: buildx
+    skip_push: true
+    image_templates:
+      - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--platform=linux/arm64"
+docker_manifests:
+- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:latest"
+  image_templates:
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}"
+  image_templates:
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:v{{ .Major }}"
+  image_templates:
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:v{{ .Major }}.{{ .Minor }}"
+  image_templates:
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"

@@ -2,8 +2,10 @@ name: build-docker-image
 
 on:
   push:
-    branches:
-      - 'main'
+    # This GitHub action creates a release when a tag that matches the pattern
+    # "v*" (e.g. v0.1.0) is created.
+    tags:
+      - 'v*'
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -38,11 +40,13 @@ jobs:
           registry: "us-docker.pkg.dev"
           username: "oauth2accesstoken"
           password: "${{ steps.auth.outputs.access_token }}"
-      - name: Build and push
-        uses: docker/build-push-action@v4
+      - uses: actions/setup-go@v4
         with:
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.PUBLIC_REGISTRY }}/pvn-wrapper:latest
-            ${{ env.PUBLIC_REGISTRY }}/pvn-wrapper:${{ github.sha }}
+          go-version: 1.20
+      - uses: goreleaser/goreleaser-action@v4
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

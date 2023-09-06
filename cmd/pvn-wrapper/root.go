@@ -1,10 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/terraform"
 	"github.com/spf13/cobra"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 var rootCmd = &cobra.Command{
@@ -16,6 +23,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(terraform.RootCmd)
+	rootCmd.Version = version
+	rootCmd.SetVersionTemplate(fmt.Sprintf("{{ .Version }} (%s %s)\n", commit, date))
 }
 
 func main() {

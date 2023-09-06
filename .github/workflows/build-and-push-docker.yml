@@ -9,9 +9,10 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+# content write needed to create releases
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 env:
   PUBLIC_REGISTRY: us-docker.pkg.dev/pvn-infra/pvn-public

@@ -27,7 +27,6 @@ release:
 dockers:
   - dockerfile: "build_template.docker"
     use: buildx
-    skip_push: true
     image_templates:
       - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
     build_flag_templates:
@@ -39,7 +38,6 @@ dockers:
       - "--platform=linux/amd64"
   - dockerfile: "build_template.docker"
     use: buildx
-    skip_push: true
     image_templates:
       - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
     build_flag_templates:

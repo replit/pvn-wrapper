@@ -43,6 +43,7 @@ func chunkReader(reader io.Reader, process func([]byte) error) error {
 	reader = bufio.NewReader(reader)
 	const chunkSize = 1024 * 1024
 	buf := make([]byte, chunkSize)
+	sentOnce := false
 	for {
 		n, err := reader.Read(buf)
 		if err != nil {
@@ -51,7 +52,15 @@ func chunkReader(reader io.Reader, process func([]byte) error) error {
 			}
 			return err
 		}
+		sentOnce = true
 		err = process(buf[:n])
+		if err != nil {
+			return err
+		}
+	}
+	if !sentOnce {
+		// HACK(naphat) somewhere our handling of empty files is incorrect, requiring us to send a no-op upload req once to avoid hanging
+		err := process(nil)
 		if err != nil {
 			return err
 		}
@@ -174,11 +183,6 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 		}
 	}
 	if len(outputFiles) > 0 {
-		conn, err := client.MakeProdvanaConnection(client.DefaultConnectionOptions())
-		if err != nil {
-			// TODO(naphat) should we return json in the event of infra errors too?
-			log.Fatal(err)
-		}
 		defer func() { _ = conn.Close() }()
 		for _, file := range outputFiles {
 			id, uploadErr := uploadOutput(ctx, getBlobsClient(), file)
@@ -210,7 +214,14 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 							log.Printf("Failed to write output %s for debugging: %+v", file.Name, err)
 						}
 					}
-					log.Fatalf("failed to upload file %s: %+v\n", file.Path, uploadErr)
+					fileName := file.Path
+					if file.Stderr {
+						fileName = "stderr"
+					}
+					if file.Stdout {
+						fileName = "stdout"
+					}
+					log.Fatalf("failed to upload file %s: %+v\n", fileName, uploadErr)
 				}
 				continue
 			}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/awsecs"
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/pulumi"
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/terraform"
 	"github.com/spf13/cobra"
@@ -23,6 +24,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(awsecs.RootCmd)
 	rootCmd.AddCommand(terraform.RootCmd)
 	rootCmd.AddCommand(pulumi.RootCmd)
 	rootCmd.Version = version

@@ -3,6 +3,7 @@ package awsecs
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prodvana/pvn-wrapper/cmdutil"
 	"github.com/spf13/cobra"
+)
+
+const (
+	serviceIdTagKey      = "pvn:id"
+	serviceVersionTagKey = "pvn:version"
 )
 
 var applyFlags = struct {
@@ -22,15 +28,67 @@ var applyFlags = struct {
 	desiredCount         int
 }{}
 
+type getResourcesOutput struct {
+	ResourceTagMappingList []struct {
+		ResourceARN string `json:"ResourceARN"`
+		Tags        []struct {
+			Key   string `json:"Key"`
+			Value string `json:"Value"`
+		} `json:"Tags"`
+	} `json:"ResourceTagMappingList"`
+}
+
+func getValidTaskDefinitionArns(pvnServiceId, pvnServiceVersion string) ([]string, error) {
+	output, err := cmdutil.RunCmdOutput(exec.Command(
+		awsPath,
+		"resourcegroupstaggingapi",
+		"get-resources",
+		"--resource-type-filters", "ecs:task-definition",
+		"--tag-filters",
+		fmt.Sprintf("Key=%s,Values=%s", serviceIdTagKey, pvnServiceId),
+		fmt.Sprintf("Key=%s,Values=%s", serviceVersionTagKey, pvnServiceVersion),
+	))
+	if err != nil {
+		return nil, err
+	}
+	var outputParsed getResourcesOutput
+	if err := json.Unmarshal(output, &outputParsed); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal get-resources output")
+	}
+	var validArns []string
+	for _, resource := range outputParsed.ResourceTagMappingList {
+		validArns = append(validArns, resource.ResourceARN)
+	}
+	return validArns, nil
+}
+
 type registerTaskDefinitionOutput struct {
 	TaskDefinition struct {
 		TaskDefinitionArn string `json:"taskDefinitionArn"`
 	} `json:"taskDefinition"`
 }
 
-func registerTaskDefinitionIfNeeded(taskDefPath string) (string, error) {
-	// TODO(naphat) skip registering if task definition already exists
-	taskDefPath, err := filepath.Abs(taskDefPath)
+func registerTaskDefinitionIfNeeded(taskDefPath, pvnServiceId, pvnServiceVersion string, serviceOutput *describeServicesOutput) (string, error) {
+	validArns, err := getValidTaskDefinitionArns(pvnServiceId, pvnServiceVersion)
+	if err != nil {
+		return "", err
+	}
+	if len(serviceOutput.Services) > 0 {
+		service := serviceOutput.Services[0]
+		for _, arn := range validArns {
+			if arn == service.TaskDefinition {
+				// prioritize returning the service's existing task arn
+				log.Printf("Using existing task definition %s already present in service definition", arn)
+				return arn, nil
+			}
+		}
+	}
+	if len(validArns) > 0 {
+		log.Printf("Using existing task definition %s", validArns[0])
+		return validArns[0], nil
+	}
+	log.Printf("Registering new task definition for %s:%s", pvnServiceId, pvnServiceVersion)
+	taskDefPath, err = filepath.Abs(taskDefPath)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to make abs path")
 	}
@@ -58,7 +116,8 @@ func registerTaskDefinitionIfNeeded(taskDefPath string) (string, error) {
 
 type describeServicesOutput struct {
 	Services []struct {
-		Status string `json:"status"`
+		Status         string `json:"status"`
+		TaskDefinition string `json:"taskDefinition"`
 	} `json:"services"`
 	Failures []struct {
 		Reason string `json:"reason"`
@@ -105,10 +164,10 @@ func patchTaskDefinition(taskDefPath, pvnServiceId, pvnServiceVersion string) (s
 		}
 	}
 	tagsList = append(tagsList, map[string]string{
-		"key":   "pvn:id",
+		"key":   serviceIdTagKey,
 		"value": pvnServiceId,
 	}, map[string]string{
-		"key":   "pvn:version",
+		"key":   serviceVersionTagKey,
 		"value": pvnServiceVersion,
 	})
 	untypedDef["tags"] = tagsList
@@ -143,11 +202,11 @@ var applyCmd = &cobra.Command{
 			return err
 		}
 		defer func() { _ = os.Remove(newTaskDefPath) }()
-		taskArn, err := registerTaskDefinitionIfNeeded(newTaskDefPath)
+		serviceOutput, err := describeService(applyFlags.ecsClusterName, applyFlags.ecsServiceName)
 		if err != nil {
 			return err
 		}
-		serviceOutput, err := describeService(applyFlags.ecsClusterName, applyFlags.ecsServiceName)
+		taskArn, err := registerTaskDefinitionIfNeeded(newTaskDefPath, applyFlags.pvnServiceId, applyFlags.pvnServiceVersion, serviceOutput)
 		if err != nil {
 			return err
 		}

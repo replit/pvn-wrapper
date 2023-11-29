@@ -237,8 +237,11 @@ var applyCmd = &cobra.Command{
 			"--network-configuration",
 			fmt.Sprintf("awsvpcConfiguration={%s}", strings.Join(networkConfigurations, ",")),
 			"--propagate-tags=TASK_DEFINITION",
+			"--cluster",
+			applyFlags.ecsClusterName,
 		}
 		if serviceOutput.Services[0].Status == "INACTIVE" || serviceOutput.Services[0].Status == "MISSING" {
+			log.Printf("Creating service %s on cluster %s with task ARN %s\n", applyFlags.ecsServiceName, applyFlags.ecsClusterName, taskArn)
 			// create service
 			createCmd := exec.Command(awsPath, append([]string{
 				"ecs",
@@ -247,11 +250,12 @@ var applyCmd = &cobra.Command{
 				applyFlags.ecsServiceName,
 				"--launch-type=FARGATE",
 			}, commonArgs...)...)
-			_, err := cmdutil.RunCmdOutput(createCmd)
+			err := cmdutil.RunCmd(createCmd)
 			if err != nil {
 				return err
 			}
 		} else {
+			log.Printf("Updating service %s on cluster %s with task ARN %s\n", applyFlags.ecsServiceName, applyFlags.ecsClusterName, taskArn)
 			// update service
 			updateCmd := exec.Command(awsPath, append([]string{
 				"ecs",
@@ -259,14 +263,13 @@ var applyCmd = &cobra.Command{
 				"--service",
 				applyFlags.ecsServiceName,
 			}, commonArgs...)...)
-			_, err := cmdutil.RunCmdOutput(updateCmd)
+			err := cmdutil.RunCmd(updateCmd)
 			if err != nil {
-				return nil
+				return err
 			}
 		}
-		waitCmd := exec.Command(awsPath, "ecs", "wait", "services-stable", "--services", applyFlags.ecsServiceName)
-		_, err = cmdutil.RunCmdOutput(waitCmd)
-		return err
+		waitCmd := exec.Command(awsPath, "ecs", "wait", "services-stable", "--services", applyFlags.ecsServiceName, "--cluster", applyFlags.ecsClusterName)
+		return cmdutil.RunCmd(waitCmd)
 	},
 }
 

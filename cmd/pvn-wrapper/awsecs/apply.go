@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/prodvana/pvn-wrapper/cmdutil"
@@ -19,13 +20,15 @@ const (
 )
 
 var applyFlags = struct {
-	taskDefinitionFile   string
-	ecsClusterName       string
-	ecsServiceName       string
-	pvnServiceId         string
-	pvnServiceVersion    string
-	networkConfiguration string
-	desiredCount         int
+	taskDefinitionFile string
+	ecsClusterName     string
+	ecsServiceName     string
+	pvnServiceId       string
+	pvnServiceVersion  string
+	desiredCount       int
+	subnets            []string
+	securityGroups     []string
+	assignPublicIp     bool
 }{}
 
 type getResourcesOutput struct {
@@ -219,13 +222,21 @@ var applyCmd = &cobra.Command{
 				return errors.Errorf("unexpected number of services: %d", len(serviceOutput.Services))
 			}
 		}
+		networkConfigurations := []string{
+			fmt.Sprintf("subnets=[%s]", strings.Join(applyFlags.subnets, ",")),
+			fmt.Sprintf("securityGroups=[%s]", strings.Join(applyFlags.securityGroups, ",")),
+		}
+		if applyFlags.assignPublicIp {
+			networkConfigurations = append(networkConfigurations, "assignPublicIp=ENABLED")
+		}
 		commonArgs := []string{
 			"--task-definition",
 			taskArn,
 			"--desired-count",
 			fmt.Sprintf("%d", applyFlags.desiredCount),
 			"--network-configuration",
-			applyFlags.networkConfiguration,
+			fmt.Sprintf("awsvpcConfiguration={%s}", strings.Join(networkConfigurations, ",")),
+			"--propagate-tags=TASK_DEFINITION",
 		}
 		if serviceOutput.Services[0].Status == "INACTIVE" || serviceOutput.Services[0].Status == "MISSING" {
 			// create service
@@ -272,8 +283,12 @@ func init() {
 	cmdutil.Must(applyCmd.MarkFlagRequired("pvn-service-id"))
 	applyCmd.Flags().StringVar(&applyFlags.pvnServiceVersion, "pvn-service-version", "", "Prodvana Service Version")
 	cmdutil.Must(applyCmd.MarkFlagRequired("pvn-service-version"))
-	applyCmd.Flags().StringVar(&applyFlags.networkConfiguration, "network-configuration", "", "awsvpc network configuration")
-	cmdutil.Must(applyCmd.MarkFlagRequired("network-configuration"))
 	applyCmd.Flags().IntVar(&applyFlags.desiredCount, "desired-count", 0, "Number of instances desired")
 	cmdutil.Must(applyCmd.MarkFlagRequired("desired-count"))
+	applyCmd.Flags().StringSliceVar(&applyFlags.subnets, "subnets", nil, "Subnets to use")
+	cmdutil.Must(applyCmd.MarkFlagRequired("subnets"))
+	applyCmd.Flags().StringSliceVar(&applyFlags.securityGroups, "security-groups", nil, "Security groups to use")
+	cmdutil.Must(applyCmd.MarkFlagRequired("security-groups"))
+	applyCmd.Flags().BoolVar(&applyFlags.assignPublicIp, "assign-public-ip", false, "Assign public IP")
+	cmdutil.Must(applyCmd.MarkFlagRequired("assign-public-ip"))
 }

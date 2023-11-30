@@ -7,9 +7,8 @@ import (
 var awsPath string
 
 var RootCmd = &cobra.Command{
-	Use:     "aws-ecs <subcommand>",
-	Short:   "AWS ECS wrapper commands",
-	Aliases: []string{"tf"},
+	Use:   "aws-ecs <subcommand>",
+	Short: "AWS ECS wrapper commands",
 	Long: `AWS ECS wrapper commands.
 
 pvn-wrapper awsecs apply ...

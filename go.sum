@@ -26,6 +26,8 @@ github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.5 h1:i9YI2yDDSipQmPqXoE
 github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.5/go.mod h1:akKYnhWn4eXFdE01XtseyD19KYyIfdd3+G8wGDbV+og=
 github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.6 h1:+ccz0BjSpWHXs+U5wNFp95CaNGy7BooJ6idKD2JZMNM=
 github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.6/go.mod h1:akKYnhWn4eXFdE01XtseyD19KYyIfdd3+G8wGDbV+og=
+github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.7 h1:WwbCpEUVxyvzLmYp0ztjifZIWiN0e7NE/Hfc28GBFFE=
+github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.7/go.mod h1:akKYnhWn4eXFdE01XtseyD19KYyIfdd3+G8wGDbV+og=
 github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=
 github.com/rogpeppe/go-internal v1.11.0/go.mod h1:ddIwULY96R17DhadqLgMfk9H9tvdUzkipdSkR5nkCZA=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=

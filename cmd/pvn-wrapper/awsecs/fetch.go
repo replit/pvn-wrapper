@@ -2,10 +2,12 @@ package awsecs
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/pkg/errors"
+	common_config_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/common_config"
 	extensions_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/runtimes/extensions"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -16,9 +18,25 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 	if err != nil {
 		return nil, err
 	}
+	region := os.Getenv("AWS_DEFAULT_REGION")
+	if region == "" {
+		return nil, errors.Errorf("AWS_DEFAULT_REGION not set")
+	}
 	ecsServiceObj := &extensions_pb.ExternalObject{
 		Name:       commonFlags.ecsServiceName,
 		ObjectType: "ECS",
+		ExternalLinks: []*common_config_pb.ExternalLink{
+			{
+				Type: common_config_pb.ExternalLink_DETAIL,
+				Name: "ECS Console",
+				Url: fmt.Sprintf(
+					"https://%[1]s.console.aws.amazon.com/ecs/v2/clusters/%[2]s/services/%[3]s?region=%[1]s",
+					region,
+					commonFlags.ecsClusterName,
+					commonFlags.ecsServiceName,
+				),
+			},
+		},
 	}
 	if serviceMissing(serviceOutput) {
 		ecsServiceObj.Status = extensions_pb.ExternalObject_PENDING

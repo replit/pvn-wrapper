@@ -6,15 +6,16 @@ import (
 )
 
 var commonFlags = struct {
-	taskDefinitionFile string
-	ecsClusterName     string
-	ecsServiceName     string
-	pvnServiceId       string
-	pvnServiceVersion  string
-	desiredCount       int
-	subnets            []string
-	securityGroups     []string
-	assignPublicIp     bool
+	taskDefinitionFile       string
+	ecsClusterName           string
+	ecsServiceName           string
+	pvnServiceId             string
+	pvnServiceVersion        string
+	desiredCount             int
+	subnets                  []string
+	securityGroups           []string
+	assignPublicIp           bool
+	updateTaskDefinitionOnly bool
 }{}
 
 func registerCommonFlags(cmd *cobra.Command) {
@@ -36,4 +37,6 @@ func registerCommonFlags(cmd *cobra.Command) {
 	cmdutil.Must(cmd.MarkFlagRequired("security-groups"))
 	cmd.Flags().BoolVar(&commonFlags.assignPublicIp, "assign-public-ip", false, "Assign public IP")
 	cmdutil.Must(cmd.MarkFlagRequired("assign-public-ip"))
+	cmd.Flags().BoolVar(&commonFlags.updateTaskDefinitionOnly, "update-task-definition-only", false, "Update task definition only")
+	cmdutil.Must(cmd.MarkFlagRequired("update-task-definition-only"))
 }

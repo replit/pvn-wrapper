@@ -283,15 +283,22 @@ var applyCmd = &cobra.Command{
 		commonArgs := []string{
 			"--task-definition",
 			taskArn,
-			"--desired-count",
-			fmt.Sprintf("%d", commonFlags.desiredCount),
-			"--network-configuration",
-			fmt.Sprintf("awsvpcConfiguration={%s}", strings.Join(networkConfigurations, ",")),
 			"--propagate-tags=TASK_DEFINITION",
 			"--cluster",
 			commonFlags.ecsClusterName,
 		}
+		if !commonFlags.updateTaskDefinitionOnly {
+			commonArgs = append(commonArgs,
+				"--desired-count",
+				fmt.Sprintf("%d", commonFlags.desiredCount),
+				"--network-configuration",
+				fmt.Sprintf("awsvpcConfiguration={%s}", strings.Join(networkConfigurations, ",")),
+			)
+		}
 		if serviceMissing(serviceOutput) {
+			if commonFlags.updateTaskDefinitionOnly {
+				return errors.Errorf("cannot update task definition only when ECS service does not exist. ECS service: %s", commonFlags.ecsServiceName)
+			}
 			log.Printf("Creating service %s on cluster %s with task ARN %s\n", commonFlags.ecsServiceName, commonFlags.ecsClusterName, taskArn)
 			// create service
 			createCmd := exec.Command(awsPath, append([]string{

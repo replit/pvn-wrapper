@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/prodvana/pvn-wrapper/cmdutil"
@@ -248,6 +247,68 @@ func patchTaskDefinition(taskDefPath, pvnServiceId, pvnServiceVersion string) (s
 	return tempFile.Name(), nil
 }
 
+func patchServiceSpec(serviceSpecPath string, ecsServiceName, ecsCluster, taskArn string, forUpdate bool) (string, error) {
+	serviceSpec, err := os.ReadFile(serviceSpecPath)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to read service spec file")
+	}
+	var untypedDef map[string]interface{}
+	if err := json.Unmarshal(serviceSpec, &untypedDef); err != nil {
+		return "", errors.Wrapf(err, "failed to unmarshal service spec file: %s", string(serviceSpec))
+	}
+
+	serviceName, hasServiceName := untypedDef["serviceName"]
+	if hasServiceName {
+		serviceNameString, ok := serviceName.(string)
+		if !ok {
+			return "", errors.Wrapf(err, "unexpected type for serviceName: %T", serviceName)
+		}
+		if serviceNameString != ecsServiceName {
+			return "", errors.Errorf("serviceName in service spec file does not match ECS service name from Prodvana Service config. Got %s, want %s", serviceNameString, ecsServiceName)
+		}
+	}
+	// delete the service field, as it's passed differently on update vs. create and handled on cli
+	delete(untypedDef, "serviceName")
+	delete(untypedDef, "service")
+	cluster, hasCluster := untypedDef["cluster"]
+	if hasCluster {
+		clusterString, ok := cluster.(string)
+		if !ok {
+			return "", errors.Wrapf(err, "unexpected type for cluster: %T", cluster)
+		}
+		if clusterString != ecsCluster {
+			return "", errors.Errorf("cluster in service spec file does not match ECS cluster name from Prodvana Runtime config. Got %s, want %s", clusterString, ecsCluster)
+		}
+	} else {
+		untypedDef["cluster"] = ecsCluster
+	}
+
+	untypedDef["taskDefinition"] = taskArn
+
+	if forUpdate {
+		delete(untypedDef, "launchType")
+	}
+
+	updatedTaskDef, err := json.Marshal(untypedDef)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to marshal")
+	}
+
+	tempFile, err := os.CreateTemp("", "ecs-task-definition")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to make tempfile")
+	}
+
+	if _, err := tempFile.Write(updatedTaskDef); err != nil {
+		return "", errors.Wrap(err, "failed to write to tempfile")
+	}
+	if err := tempFile.Close(); err != nil {
+		return "", errors.Wrap(err, "failed to close tempfile")
+	}
+
+	return tempFile.Name(), nil
+}
+
 func serviceMissing(output *describeServicesOutput) bool {
 	if len(output.Failures) > 0 {
 		return output.Failures[0].Reason == "MISSING"
@@ -273,26 +334,26 @@ var applyCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		networkConfigurations := []string{
-			fmt.Sprintf("subnets=[%s]", strings.Join(commonFlags.subnets, ",")),
-			fmt.Sprintf("securityGroups=[%s]", strings.Join(commonFlags.securityGroups, ",")),
-		}
-		if commonFlags.assignPublicIp {
-			networkConfigurations = append(networkConfigurations, "assignPublicIp=ENABLED")
-		}
 		commonArgs := []string{
-			"--task-definition",
-			taskArn,
 			"--propagate-tags=TASK_DEFINITION",
-			"--cluster",
+			"--cluster", // must be set regardless of serviceSpec, in case updateTaskDefinitionOnly is set
 			commonFlags.ecsClusterName,
 		}
 		if !commonFlags.updateTaskDefinitionOnly {
+			newServiceSpecPath, err := patchServiceSpec(
+				commonFlags.serviceSpecFile,
+				commonFlags.ecsServiceName,
+				commonFlags.ecsClusterName,
+				taskArn,
+				!serviceMissing(serviceOutput),
+			)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = os.Remove(newServiceSpecPath) }()
 			commonArgs = append(commonArgs,
-				"--desired-count",
-				fmt.Sprintf("%d", commonFlags.desiredCount),
-				"--network-configuration",
-				fmt.Sprintf("awsvpcConfiguration={%s}", strings.Join(networkConfigurations, ",")),
+				"--cli-input-json",
+				fmt.Sprintf("file://%s", newServiceSpecPath),
 			)
 		}
 		if serviceMissing(serviceOutput) {
@@ -306,7 +367,6 @@ var applyCmd = &cobra.Command{
 				"create-service",
 				"--service-name",
 				commonFlags.ecsServiceName,
-				"--launch-type=FARGATE",
 			}, commonArgs...)...)
 			err := cmdutil.RunCmd(createCmd)
 			if err != nil {
@@ -319,7 +379,7 @@ var applyCmd = &cobra.Command{
 				"ecs",
 				"update-service",
 				"--service",
-				commonFlags.ecsServiceName,
+				commonFlags.ecsServiceName, // must be set regardless of serviceSpec, in case updateTaskDefinitionOnly is set
 			}, commonArgs...)...)
 			err := cmdutil.RunCmd(updateCmd)
 			if err != nil {

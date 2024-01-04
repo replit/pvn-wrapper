@@ -339,7 +339,12 @@ var applyCmd = &cobra.Command{
 			"--cluster", // must be set regardless of serviceSpec, in case updateTaskDefinitionOnly is set
 			commonFlags.ecsClusterName,
 		}
-		if !commonFlags.updateTaskDefinitionOnly {
+		if commonFlags.updateTaskDefinitionOnly {
+			commonArgs = append(commonArgs,
+				"--task-definition",
+				taskArn,
+			)
+		} else {
 			newServiceSpecPath, err := patchServiceSpec(
 				commonFlags.serviceSpecFile,
 				commonFlags.ecsServiceName,

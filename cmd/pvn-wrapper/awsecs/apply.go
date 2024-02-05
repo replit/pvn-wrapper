@@ -115,11 +115,20 @@ func registerTaskDefinitionIfNeeded(taskDefPath, pvnServiceId, pvnServiceVersion
 		log.Printf("Using existing task definition %s", validArns[0])
 		return validArns[0], nil
 	}
-	log.Printf("Registering new task definition for %s:%s", pvnServiceId, pvnServiceVersion)
+
 	taskDefPath, err = filepath.Abs(taskDefPath)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to make abs path")
 	}
+
+	taskDefContents, err := os.ReadFile(taskDefPath)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to read task definition file")
+	}
+	// Printing task definition contents to help with debugging.
+	log.Printf("Task definition:\n%s", taskDefContents)
+	log.Printf("Registering new task definition for %s:%s", pvnServiceId, pvnServiceVersion)
+
 	registerCmd := exec.Command(
 		awsPath,
 		"ecs",
@@ -360,6 +369,13 @@ var applyCmd = &cobra.Command{
 				"--cli-input-json",
 				fmt.Sprintf("file://%s", newServiceSpecPath),
 			)
+
+			serviceDefContents, err := os.ReadFile(newServiceSpecPath)
+			if err != nil {
+				return errors.Wrap(err, "failed to read service definition file")
+			}
+			// Printing service definition contents to help with debugging.
+			log.Printf("Service definition:\n%s", serviceDefContents)
 		}
 		if serviceMissing(serviceOutput) {
 			if commonFlags.updateTaskDefinitionOnly {

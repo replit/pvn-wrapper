@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -23,12 +22,13 @@ func RunCmd(cmd *exec.Cmd) error {
 func RunCmdOutput(cmd *exec.Cmd) ([]byte, error) {
 	log.Printf("Running command: %s", cmd.String())
 	output, err := cmd.Output()
+	log.Printf("Command output (%s):\n%s", cmd.String(), output)
 	if err != nil {
 		var exitErr *exec.ExitError
 		if go_errors.As(err, &exitErr) {
 			return nil, errors.Wrapf(err, "Command failed:\n%s\n%s", cmd.String(), string(exitErr.Stderr))
 		}
-		return nil, errors.Wrapf(err, "Command failed for unknown reasons:\n%s", strings.Join(cmd.Args, " "))
+		return nil, errors.Wrapf(err, "Command failed for unknown reasons:\n%s", cmd.String())
 	}
 	return output, nil
 }

@@ -93,6 +93,7 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 	<-done
 	ecsServiceObj.Versions = versions
 	foundCount := 0
+	var debugMessage string
 	for _, depl := range serviceOutput.Services[0].Deployments {
 		if depl.Status == "PRIMARY" {
 			switch depl.RolloutState {
@@ -102,11 +103,21 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 				ecsServiceObj.Status = extensions_pb.ExternalObject_FAILED
 			}
 			foundCount++
+			// TODO(naphat) timezone for createdAt?
+			if depl.FailedTasks > 0 {
+				debugMessage = fmt.Sprintf("Latest deployment %s started at %s and has %d failed tasks", depl.Id, depl.CreatedAt, depl.FailedTasks)
+			} else {
+				debugMessage = fmt.Sprintf("Latest deployment %s started at %s", depl.Id, depl.CreatedAt)
+			}
 		}
 	}
 	if foundCount != 1 {
 		log.Printf("Found multiple PRIMARY deployments for service %s, marking it as PENDING", commonFlags.ecsServiceName)
 		ecsServiceObj.Status = extensions_pb.ExternalObject_PENDING
+		debugMessage = "Found multiple PRIMARY deployments"
+	}
+	if ecsServiceObj.Status == extensions_pb.ExternalObject_PENDING {
+		ecsServiceObj.Message = debugMessage
 	}
 	return &extensions_pb.FetchOutput{
 		Objects: []*extensions_pb.ExternalObject{

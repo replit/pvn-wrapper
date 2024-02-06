@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prodvana/pvn-wrapper/cmdutil"
@@ -169,6 +170,10 @@ type describeServicesOutput struct {
 			DesiredCount         int                  `json:"desiredCount"`
 			PendingCount         int                  `json:"pendingCount"`
 			RunningCount         int                  `json:"runningCount"`
+			FailedTasks          int                  `json:"failedTasks"`
+			Id                   string               `json:"id"`
+			CreatedAt            time.Time            `json:"createdAt"`
+			UpdatedAt            time.Time            `json:"updatedAt"`
 			NetworkConfiguration networkConfiguration `json:"networkConfiguration"`
 			RolloutState         string               `json:"rolloutState"`
 			RolloutStateReason   string               `json:"rolloutStateReason"`

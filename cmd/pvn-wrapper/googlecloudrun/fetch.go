@@ -1,7 +1,6 @@
 package googlecloudrun
 
 import (
-	"encoding/json"
 	go_errors "errors"
 	"fmt"
 	"os"
@@ -13,6 +12,7 @@ import (
 	extensions_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/runtimes/extensions"
 	"github.com/prodvana/pvn-wrapper/cmdutil"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 	corev1 "k8s.io/api/core/v1"
 	"knative.dev/pkg/apis"
 	knative_serving "knative.dev/serving/pkg/apis/serving/v1"
@@ -133,9 +133,13 @@ var fetchCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		err = json.NewEncoder(os.Stdout).Encode(fetchOutput)
+		output, err := protojson.Marshal(fetchOutput)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal")
+		}
+		_, err = os.Stdout.Write(output)
+		if err != nil {
+			return errors.Wrap(err, "failed to write to stdout")
 		}
 		return nil
 	},

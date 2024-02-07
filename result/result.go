@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	go_errors "errors"
 	"fmt"
 	"io"
@@ -18,6 +17,7 @@ import (
 	blobs_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/blobs"
 	"github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/pvn_wrapper"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type OutputFileUpload struct {
@@ -244,9 +244,13 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 		}
 	}
 
-	err = json.NewEncoder(os.Stdout).Encode(result)
+	output, err := protojson.Marshal(result)
 	if err != nil {
 		// If something went wrong during encode/write to stdout, indicate that in stderr and exit non-zero.
+		log.Fatal(err)
+	}
+	_, err = os.Stdout.Write(output)
+	if err != nil {
 		log.Fatal(err)
 	}
 

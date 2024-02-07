@@ -1,16 +1,19 @@
 package awsecs
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/pkg/errors"
 	common_config_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/common_config"
+	runtimes_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/runtimes"
 	extensions_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/runtimes/extensions"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func runFetch() (*extensions_pb.FetchOutput, error) {
@@ -94,6 +97,7 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 	ecsServiceObj.Versions = versions
 	foundCount := 0
 	var debugMessage string
+	var debugEvents []*runtimes_pb.DebugEvent
 	for _, depl := range serviceOutput.Services[0].Deployments {
 		if depl.Status == "PRIMARY" {
 			switch depl.RolloutState {
@@ -103,11 +107,15 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 				ecsServiceObj.Status = extensions_pb.ExternalObject_FAILED
 			}
 			foundCount++
-			// TODO(naphat) timezone for createdAt?
+			debugEvents = append(debugEvents, &runtimes_pb.DebugEvent{
+				Timestamp: timestamppb.New(depl.CreatedAt),
+				Message:   fmt.Sprintf("Deployment %s started.", depl.Id),
+			})
 			if depl.FailedTasks > 0 {
-				debugMessage = fmt.Sprintf("Latest deployment %s started at %s and has %d failed tasks", depl.Id, depl.CreatedAt, depl.FailedTasks)
-			} else {
-				debugMessage = fmt.Sprintf("Latest deployment %s started at %s", depl.Id, depl.CreatedAt)
+				debugEvents = append(debugEvents, &runtimes_pb.DebugEvent{
+					Timestamp: timestamppb.New(depl.UpdatedAt),
+					Message:   fmt.Sprintf("Deployment %s has %d failing tasks.", depl.Id, depl.FailedTasks),
+				})
 			}
 		}
 	}
@@ -116,8 +124,13 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 		ecsServiceObj.Status = extensions_pb.ExternalObject_PENDING
 		debugMessage = "Found multiple PRIMARY deployments"
 	}
+	sort.Slice(debugEvents, func(i, j int) bool {
+		// sort descending order
+		return debugEvents[i].Timestamp.AsTime().After(debugEvents[j].Timestamp.AsTime())
+	})
 	if ecsServiceObj.Status == extensions_pb.ExternalObject_PENDING {
 		ecsServiceObj.Message = debugMessage
+		ecsServiceObj.DebugEvents = debugEvents
 	}
 	return &extensions_pb.FetchOutput{
 		Objects: []*extensions_pb.ExternalObject{
@@ -135,9 +148,13 @@ var fetchCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		err = json.NewEncoder(os.Stdout).Encode(fetchOutput)
+		output, err := protojson.Marshal(fetchOutput)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal")
+		}
+		_, err = os.Stdout.Write(output)
+		if err != nil {
+			return errors.Wrap(err, "failed to write to stdout")
 		}
 		return nil
 	},

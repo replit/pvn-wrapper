@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prodvana/prodvana-public/go/prodvana-sdk/client"
 	blobs_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/blobs"
-	"github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/pvn_wrapper"
+	pvn_wrapper_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/pvn_wrapper"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -138,21 +138,31 @@ func downloadBlob(ctx context.Context, blobsClient blobs_pb.BlobsManagerClient, 
 
 // Handle the "main" function of wrapper commands.
 // This function never returns.
-func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(context.Context) (*pvn_wrapper.Output, []OutputFileUpload, error)) {
+func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(context.Context) (*pvn_wrapper_pb.Output, []OutputFileUpload, error)) {
 	ctx := context.Background()
 	var conn *grpc.ClientConn
+	getProdvanaConnection := func() *grpc.ClientConn {
+		var err error
+		conn, err = client.MakeProdvanaConnection(client.DefaultConnectionOptions())
+		if err != nil {
+			// TODO(naphat) should we return json in the event of infra errors too?
+			log.Fatal(err)
+		}
+		return conn
+	}
 	var blobsClient blobs_pb.BlobsManagerClient
 	getBlobsClient := func() blobs_pb.BlobsManagerClient {
 		if blobsClient == nil {
-			var err error
-			conn, err = client.MakeProdvanaConnection(client.DefaultConnectionOptions())
-			if err != nil {
-				// TODO(naphat) should we return json in the event of infra errors too?
-				log.Fatal(err)
-			}
-			blobsClient = blobs_pb.NewBlobsManagerClient(conn)
+			blobsClient = blobs_pb.NewBlobsManagerClient(getProdvanaConnection())
 		}
 		return blobsClient
+	}
+	var jobClient pvn_wrapper_pb.JobManagerClient
+	getJobClient := func() pvn_wrapper_pb.JobManagerClient {
+		if jobClient == nil {
+			jobClient = pvn_wrapper_pb.NewJobManagerClient(getProdvanaConnection())
+		}
+		return jobClient
 	}
 	defer func() {
 		if conn != nil {
@@ -168,9 +178,13 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 	result, outputFiles, err := run(ctx)
 	duration := time.Since(startTs)
 	if err != nil {
-		result := &pvn_wrapper.Output{}
+		result := &pvn_wrapper_pb.Output{}
 		result.ExecError = err.Error()
 		result.ExitCode = -1
+	}
+	hostname, err := os.Hostname()
+	if err == nil {
+		result.Hostname = hostname
 	}
 	result.StartTimestampNs = startTs.UnixNano()
 	result.DurationNs = duration.Nanoseconds()
@@ -236,11 +250,22 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 				}
 				result.StderrBlobId = id
 			} else {
-				result.Files = append(result.Files, &pvn_wrapper.OutputFile{
+				result.Files = append(result.Files, &pvn_wrapper_pb.OutputFile{
 					Name:          file.Name,
 					ContentBlobId: id,
 				})
 			}
+		}
+	}
+
+	jobId := os.Getenv("PVN_JOB_ID")
+	if jobId != "" {
+		_, err := getJobClient().ReportJobResult(ctx, &pvn_wrapper_pb.ReportJobResultReq{
+			JobId:  jobId,
+			Output: result,
+		})
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
@@ -260,13 +285,13 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 	os.Exit(int(result.ExitCode))
 }
 
-func RunCmd(cmd *exec.Cmd) (*pvn_wrapper.Output, []OutputFileUpload, error) {
+func RunCmd(cmd *exec.Cmd) (*pvn_wrapper_pb.Output, []OutputFileUpload, error) {
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	var result pvn_wrapper.Output
+	var result pvn_wrapper_pb.Output
 
 	err := cmd.Run()
 

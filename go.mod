@@ -1,11 +1,13 @@
 module github.com/prodvana/pvn-wrapper
 
-go 1.21
+go 1.22
+
+toolchain go1.22.1
 
 require (
 	github.com/spf13/cobra v1.7.0
 	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	k8s.io/api v0.27.6
 	knative.dev/pkg v0.0.0-20231023151236-29775d7c9e5c
 	knative.dev/serving v0.39.2
@@ -56,7 +58,7 @@ require (
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.20
+	github.com/prodvana/prodvana-public/go/prodvana-sdk v0.3.33
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.5.0

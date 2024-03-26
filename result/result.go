@@ -178,7 +178,7 @@ func RunWrapper(inputFiles []InputFile, successExitCodes []int32, run func(conte
 	result, outputFiles, err := run(ctx)
 	duration := time.Since(startTs)
 	if err != nil {
-		result := &pvn_wrapper_pb.Output{}
+		result = &pvn_wrapper_pb.Output{}
 		result.ExecError = err.Error()
 		result.ExitCode = -1
 	}

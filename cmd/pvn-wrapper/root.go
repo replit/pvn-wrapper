@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/awsecs"
+	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/fly"
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/googlecloudrun"
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/pulumi"
 	"github.com/prodvana/pvn-wrapper/cmd/pvn-wrapper/terraform"
@@ -29,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(terraform.RootCmd)
 	rootCmd.AddCommand(pulumi.RootCmd)
 	rootCmd.AddCommand(googlecloudrun.RootCmd)
+	rootCmd.AddCommand(fly.RootCmd)
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate(fmt.Sprintf("{{ .Version }} (%s %s)\n", commit, date))
 }

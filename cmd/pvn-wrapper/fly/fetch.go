@@ -20,6 +20,7 @@ import (
 
 type flyStatusOutput struct {
 	ID       string        `json:"ID"`
+	AppURL   string        `json:"AppURL"`
 	Name     string        `json:"Name"`
 	Hostname string        `json:"Hostname"`
 	Deployed bool          `json:"Deployed"`
@@ -118,6 +119,11 @@ func runFetch() (*extensions_pb.FetchOutput, error) {
 					"https://fly.io/apps/%[1]s",
 					status.ID, // 1
 				),
+			},
+			{
+				Type: common_config_pb.ExternalLink_APP,
+				Name: "App",
+				Url:  status.AppURL,
 			},
 		},
 	}

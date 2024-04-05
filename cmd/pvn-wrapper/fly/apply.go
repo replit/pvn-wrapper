@@ -1,14 +1,45 @@
 package fly
 
 import (
+	go_errors "errors"
 	"os"
 	"os/exec"
 
+	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	common_config_pb "github.com/prodvana/prodvana-public/go/prodvana-sdk/proto/prodvana/common_config"
 	"github.com/prodvana/pvn-wrapper/cmdutil"
 	"github.com/spf13/cobra"
 )
+
+type flyCfg struct {
+	App string `toml:"app"`
+}
+
+func createIfNeeded(tomlFile string) error {
+	bytes, err := os.ReadFile(tomlFile)
+	if err != nil {
+		return errors.Wrap(err, "failed to read toml file")
+	}
+	var cfg flyCfg
+	if err := toml.Unmarshal(bytes, &cfg); err != nil {
+		return errors.Wrap(err, "failed to unmarshal toml file")
+	}
+	_, err = flyStatus(tomlFile)
+	if err == nil {
+		return nil
+	}
+	if !go_errors.Is(err, errServiceNotFound) {
+		return err
+	}
+	createCmd := exec.Command(
+		flyPath,
+		"app",
+		"create",
+		cfg.App,
+	)
+	return cmdutil.RunCmd(createCmd)
+}
 
 var applyCmd = &cobra.Command{
 	Use:   "apply",
@@ -24,6 +55,9 @@ var applyCmd = &cobra.Command{
 			return err
 		}
 		defer func() { _ = os.Remove(tomlFile) }()
+		if err := createIfNeeded(tomlFile); err != nil {
+			return err
+		}
 		envToInject := cfg.Env
 		envToInject["PVN_SERVICE_ID"] = &common_config_pb.EnvValue{
 			ValueOneof: &common_config_pb.EnvValue_Value{Value: commonFlags.pvnServiceId},

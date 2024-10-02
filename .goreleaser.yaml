@@ -1,3 +1,4 @@
+version: 2
 before:
   hooks:
     - go mod tidy
@@ -14,13 +15,13 @@ builds:
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 changelog:
-  skip: true
+  disable: true
 
 release:
   github:
-    owner: prodvana
+    owner: repliit
     name: pvn-wrapper
   mode: replace
 
@@ -28,7 +29,7 @@ dockers:
   - dockerfile: "build_template.docker"
     use: buildx
     image_templates:
-      - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+      - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
     build_flag_templates:
       - "--pull"
       - "--label=org.opencontainers.image.created={{ .Date }}"
@@ -39,7 +40,7 @@ dockers:
   - dockerfile: "build_template.docker"
     use: buildx
     image_templates:
-      - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+      - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
     build_flag_templates:
       - "--pull"
       - "--label=org.opencontainers.image.created={{ .Date }}"
@@ -48,19 +49,19 @@ dockers:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--platform=linux/arm64"
 docker_manifests:
-- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:latest"
+- name_template: "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:latest"
   image_templates:
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
-- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+- name_template: "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}"
   image_templates:
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
-- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:v{{ .Major }}"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+- name_template: "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:v{{ .Major }}"
   image_templates:
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
-- name_template: "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:v{{ .Major }}.{{ .Minor }}"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+- name_template: "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:v{{ .Major }}.{{ .Minor }}"
   image_templates:
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
-  - "us-docker.pkg.dev/pvn-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-amd64"
+  - "us-docker.pkg.dev/replit-prodvana-infra/pvn-public/pvn-wrapper:{{ .Tag }}-arm64"
